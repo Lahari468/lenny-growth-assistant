@@ -68,7 +68,7 @@ Responsibilities:
 
 Required implementation:
 
-- Anthropic Claude Agent SDK or Pi Coding Agent
+- Pi Coding Agent through the official `pi --mode rpc` CLI
 - Thin adapter around the existing application services
 - Route user intent to retrieval/answering, writing skill, or artifact generation
 
@@ -242,7 +242,11 @@ Agent
      +-- artifact request --> Conversation context --> Artifact tool
 ```
 
-The exact routing mechanism depends on the selected required agent framework, but the application services remain independently testable.
+Pi is enabled only with `PI_ENABLED=true`; its executable, provider, model,
+and timeout are explicit environment settings. The selected Pi model must be
+tool-capable (the normal `phi3:latest` Ollama chat default is known not to be).
+Pi planning is not an evidence source: all final answers continue through the
+grounded answerer and are constrained to retrieved transcript sources.
 
 ## 9. Provider Selection
 

@@ -19,6 +19,8 @@ The implementation is intentionally developed in vertical slices. Documentation 
 - Content-hash/source-based ingestion idempotency
 - Ollama `nomic-embed-text` embeddings
 - Ollama chat provider using configurable `phi3:latest`
+- Persistent session/message API backed by PostgreSQL
+- Optional Pi Coding Agent RPC orchestration with safe failure handling
 - Provider abstraction for future cloud/local model switching
 - pgvector cosine-similarity retrieval
 - Retrieval source traceability
@@ -29,8 +31,6 @@ The implementation is intentionally developed in vertical slices. Documentation 
 
 ### In Progress
 
-- Agent layer using the required Anthropic Claude Agent SDK or Pi Coding Agent
-- Independent chat-session API and message persistence
 - Ship 30 for 30 content skill
 - Artifact generation and in-app artifact viewer
 - React frontend
@@ -162,7 +162,7 @@ lenny-growth-assistant/
 
 ## Prerequisites
 
-- Python 3.11+ recommended
+- Python 3.9 (the supported backend runtime; do not upgrade it for this project)
 - PostgreSQL with pgvector
 - Ollama
 - Git
@@ -183,6 +183,10 @@ ollama pull nomic-embed-text
 ollama pull phi3:latest
 ```
 
+`phi3:latest` is suitable for regular Ollama grounded answers, but it is known
+not to satisfy Pi's tool requirements. Do not configure it as `PI_MODEL`.
+Choose and independently test a tool-capable Pi model instead.
+
 If `ollama serve` reports that port `11434` is already in use, an Ollama server is likely already running. Do not start a second server; verify it with the curl command above.
 
 ## Environment Configuration
@@ -201,9 +205,36 @@ Typical local configuration includes:
 DATABASE_URL=postgresql+psycopg://<user>:<password>@localhost:5432/lenny_growth_assistant
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_CHAT_MODEL=phi3:latest
+PI_ENABLED=true
+PI_COMMAND=pi
+PI_PROVIDER=
+PI_MODEL=
+PI_TIMEOUT_SECONDS=60
 ```
 
 Embedding configuration should remain independent from the chat provider so changing the chat model does not change vector dimensions or invalidate the knowledge base.
+
+## Session API and Pi agent
+
+The backend exposes `POST /api/sessions`, `GET /api/sessions`,
+`GET /api/sessions/{session_id}`, and
+`POST /api/sessions/{session_id}/messages`. Sessions, user names, and the
+complete chronological message history are stored in PostgreSQL. Assistant
+messages retain provider/model metadata.
+
+When `PI_ENABLED=true`, a thin bridge launches the official CLI as
+`PI_COMMAND --mode rpc --no-session` and exchanges JSONL prompt/events. Pi is
+an orchestration step only: its planning text is neither shown to users nor
+treated as evidence. Retrieval and final generation always go through the
+existing grounded-answer service, preserving citations and deterministic empty
+retrieval behavior. Missing Pi, malformed RPC output, process failure, and
+timeout become safe 503 responses without leaking process output or secrets.
+
+Pi is enabled by default and unavailable Pi executions fall back to the same
+grounded Ollama path; set `PI_ENABLED=false` only to deliberately opt out of
+agent orchestration.
+Anthropic remains an interface-level future provider: no SDK is forced into
+this Python 3.9 backend.
 
 ## Database
 
@@ -252,7 +283,7 @@ Run the backend test suite:
 pytest -q
 ```
 
-The current development baseline reached **80 passing tests** after the provider and grounded-answer work. The final submission must rerun the complete suite after all remaining features are implemented.
+The original development baseline reached **80 passing tests** after the provider and grounded-answer work. The suite also exercises the session API, persistence/orchestration behavior, and Pi RPC error handling.
 
 Tests currently cover provider behavior and grounded-answer/RAG behavior, in addition to the existing backend foundation.
 
