@@ -1,12 +1,7 @@
 """
 Embedding generation.
 
-Single source of truth for the embedding model: `nomic-embed-text` served
-locally by Ollama, producing vectors of `EMBEDDING_DIMENSION` (768, defined
-once in app.db.models). This module intentionally has no notion of the
-chat provider (Ollama vs. Anthropic) — embeddings never depend on which
-provider is answering a given chat, so the corpus never needs re-embedding
-just because someone switches providers mid-project.
+Uses the local Ollama embedding model configured for the project.
 """
 
 from __future__ import annotations
@@ -19,16 +14,16 @@ from app.db.models import EMBEDDING_DIMENSION
 
 
 class EmbeddingError(RuntimeError):
-    """Raised for any embedding failure: unreachable server, bad response,
-    or a dimension mismatch against the fixed project-wide dimension."""
+    """Raised when embedding generation fails."""
 
 
 class EmbeddingProvider(Protocol):
-    def embed(self, text: str) -> list[float]: ...
+    def embed(self, text: str) -> list[float]:
+        ...
 
 
 class OllamaEmbeddingProvider:
-    """Calls a local Ollama server's embeddings endpoint."""
+    """Calls Ollama's current /api/embed endpoint."""
 
     def __init__(
         self,
@@ -41,13 +36,24 @@ class OllamaEmbeddingProvider:
         self.timeout_seconds = timeout_seconds
 
     def embed(self, text: str) -> list[float]:
+        if not text.strip():
+            raise EmbeddingError("Cannot generate an embedding for empty text.")
+
         try:
             response = httpx.post(
-                f"{self.base_url}/api/embeddings",
-                json={"model": self.model, "prompt": text},
+                f"{self.base_url}/api/embed",
+                json={
+                    "model": self.model,
+                    "input": text,
+                },
                 timeout=self.timeout_seconds,
             )
             response.raise_for_status()
+        except httpx.TimeoutException as exc:
+            raise EmbeddingError(
+                f"Ollama embedding request timed out after "
+                f"{self.timeout_seconds:.0f}s."
+            ) from exc
         except httpx.HTTPError as exc:
             raise EmbeddingError(
                 f"Could not reach Ollama at {self.base_url} for embeddings. "
@@ -62,19 +68,30 @@ class OllamaEmbeddingProvider:
                 f"Ollama returned a non-JSON response from {self.base_url}."
             ) from exc
 
-        embedding = data.get("embedding")
-        if not embedding:
+        embeddings = data.get("embeddings")
+
+        if not isinstance(embeddings, list) or not embeddings:
             raise EmbeddingError(
                 f"Ollama returned no embedding vector for model '{self.model}'."
             )
+
+        embedding = embeddings[0]
+
+        if not isinstance(embedding, list):
+            raise EmbeddingError(
+                f"Ollama returned an invalid embedding vector for model "
+                f"'{self.model}'."
+            )
+
         if len(embedding) != EMBEDDING_DIMENSION:
             raise EmbeddingError(
-                f"Embedding dimension mismatch: expected {EMBEDDING_DIMENSION}, "
-                f"got {len(embedding)}. Check that '{self.model}' is the model "
-                f"the project is configured for."
+                f"Embedding dimension mismatch: expected "
+                f"{EMBEDDING_DIMENSION}, got {len(embedding)}. "
+                f"Check that '{self.model}' is the configured embedding model."
             )
-        return embedding
+
+        return [float(value) for value in embedding]
 
     def health_check(self) -> None:
-        """Raises EmbeddingError if the embedding backend isn't usable."""
+        """Raises EmbeddingError if Ollama embeddings are unavailable."""
         self.embed("healthcheck")

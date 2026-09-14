@@ -202,6 +202,56 @@ def test_invalid_citation_is_removed_and_flagged(caplog):
     assert result.sources[0].source_id == "S1"
 
 
+def test_malformed_and_unknown_citations_are_removed_while_valid_citation_remains():
+    chunk = _make_chunk(content="Retention flattens when product-market fit is strong.")
+    retriever = _FakeRetriever(chunks=[chunk])
+    provider = _FakeChatProvider(
+        response=ChatResponse(
+            text="Retention is the signal to watch [S1]. [/S2] [S2] [ S2 ]",
+            provider="ollama",
+            model="phi3:latest",
+        )
+    )
+
+    result = answer("Explain retention", retriever, provider, db=object())
+
+    assert result.text == "Retention is the signal to watch [S1]."
+    assert "S2" not in result.text
+
+
+def test_retention_follow_up_with_retention_source_generates_grounded_answer():
+    retention_chunk = _make_chunk(
+        content=(
+            "Watch cohort retention curves closely. If week-four retention is "
+            "flattening rather than continuing to decay, that is an early signal "
+            "of product-market fit."
+        )
+    )
+    retriever = _FakeRetriever(chunks=[retention_chunk])
+    provider = _FakeChatProvider(
+        response=ChatResponse(
+            text="The retention point is that a flattening week-four cohort curve is an early product-market-fit signal [S1].",
+            provider="ollama",
+            model="phi3:latest",
+        )
+    )
+    first_question = "What are the most important lessons about product growth?"
+    follow_up = "Can you explain the retention point in more detail?"
+
+    result = answer(
+        follow_up,
+        retriever,
+        provider,
+        db=object(),
+        retrieval_query=first_question + "\n" + follow_up,
+    )
+
+    assert result.text != INSUFFICIENT_CONTEXT_MESSAGE
+    assert "[S1]" in result.text
+    assert provider.calls[0]["user_prompt"] == follow_up
+    assert "Follow-up wording" in provider.calls[0]["system_prompt"]
+
+
 def test_provider_error_propagates():
     chunk = _make_chunk()
     retriever = _FakeRetriever(chunks=[chunk])

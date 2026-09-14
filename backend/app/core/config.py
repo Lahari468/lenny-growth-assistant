@@ -43,6 +43,19 @@ class Settings(BaseSettings):
     # Chat generation model, distinct from the embedding model above — the
     # two are not interchangeable (see app/providers/ollama.py).
     ollama_chat_model: str = "phi3:latest"
+        # Chat provider selection
+    chat_provider: str = "ollama"
+
+    # Anthropic cloud provider
+    anthropic_api_key: str = ""
+    anthropic_model: str = "claude-sonnet-5"
+    # Pi Coding Agent is an optional orchestration layer.  It never replaces
+    # the transcript-grounded answerer below.
+    pi_enabled: bool = True
+    pi_command: str = "pi"
+    pi_provider: str = ""
+    pi_model: str = ""
+    pi_timeout_seconds: float = 60.0
 
     # Path to the transcript corpus, relative to the project root (the
     # parent of this backend/ directory) unless given as an absolute path.

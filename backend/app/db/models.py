@@ -111,6 +111,8 @@ class Message(Base):
     )
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    provider: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    model: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         server_default=func.now(), nullable=False, index=True
     )
@@ -208,4 +210,3 @@ __all__ = [
     "DocumentChunk",
     "EMBEDDING_DIMENSION",
 ]
-

@@ -36,7 +36,9 @@ from app.rag.retriever import RetrievedChunk, Retriever
 
 logger = logging.getLogger("app.rag.answerer")
 
-_CITATION_PATTERN = re.compile(r"\[S(\d+)\]")
+_CITATION_PATTERN = re.compile(
+    r"\[\s*(?P<closing>/?)\s*S\s*(?P<number>\d+)\s*\]", re.IGNORECASE
+)
 
 INSUFFICIENT_CONTEXT_MESSAGE = (
     "I couldn't find enough relevant information in the available Lenny "
@@ -51,6 +53,8 @@ Rules you must follow exactly:
 - Do not invent facts, statistics, quotations, or sources that are not explicitly present in the context below.
 - Every factual claim must be supported by at least one source, cited using its exact bracketed ID (for example [S1] or [S2]).
 - Only cite source IDs that appear in the context below. Never invent a source ID that isn't listed.
+- Follow-up wording (for example, "the retention point", "the first one", or "tell me more") may refer to a topic explicitly discussed in a source. When a supplied source directly discusses that topic, explain only what that source says and cite it; do not return insufficient context merely because the question is phrased as a follow-up.
+- Return the insufficient-context sentence only when none of the supplied sources supports an answer to the topic in the question.
 - If the context below does not contain enough information to answer the question, respond with exactly this sentence and nothing else: "{insufficient_context_message}"
 - If you are uncertain whether the context fully supports part of an answer, say so explicitly rather than guessing.
 
@@ -120,9 +124,11 @@ def _sanitize_citations(text: str, valid_source_ids: set[str]) -> tuple[str, lis
     invalid_ids: list[str] = []
 
     def _replace(match: re.Match) -> str:
-        cited = f"S{match.group(1)}"
-        if cited in valid_source_ids:
-            return match.group(0)
+        cited = f"S{match.group('number')}"
+        # A leading slash is a malformed closing-style marker (e.g. [/S2]),
+        # never a valid citation even if its numeric ID exists.
+        if not match.group("closing") and cited in valid_source_ids:
+            return f"[{cited}]"
         invalid_ids.append(cited)
         return ""
 
@@ -138,6 +144,7 @@ def answer(
     db: Session,
     top_k: int = 5,
     similarity_threshold: float | None = None,
+    retrieval_query: str | None = None,
 ) -> GroundedAnswer:
     """Produce a grounded answer to `query` using only retrieved transcript
     context.
@@ -151,8 +158,12 @@ def answer(
     """
     start = time.monotonic()
 
+    # ``retrieval_query`` may carry non-evidentiary conversation references
+    # used only to resolve a follow-up.  The original ``query`` remains the
+    # user prompt sent to the answer model; retrieved transcript chunks remain
+    # its only factual context.
     chunks = retriever.retrieve(
-        query, db, top_k=top_k, similarity_threshold=similarity_threshold
+        retrieval_query or query, db, top_k=top_k, similarity_threshold=similarity_threshold
     )
 
     if not chunks:
