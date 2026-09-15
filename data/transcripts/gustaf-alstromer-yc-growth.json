@@ -1,0 +1,8 @@
+{
+  "id": "gustaf-alstromer-yc-growth",
+  "title": "Retention Curves, North Star Metrics, and Growth",
+  "guest": "Gustaf Alström­er",
+  "source_url": "https://www.lennyspodcast.com/",
+  "published_at": "2024-01-01",
+  "content": "Demo source notes — original paraphrase, not a verbatim transcript.\n\nRetention is a useful indicator of whether users repeatedly receive value. Cohort analysis helps teams separate user groups by starting period and understand how behavior changes over time instead of relying only on blended numbers.\n\nA useful North Star metric should represent meaningful value exchanged between the product and customers. Supporting metrics can cover acquisition, activation, retention, and monetization.\n\nBefore scaling acquisition aggressively, teams should look for evidence that users want the product. Weak retention can make additional acquisition inefficient because more users are entering a product that has not yet demonstrated durable value."
+}
