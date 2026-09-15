@@ -163,7 +163,6 @@ Recommended artifact prompt:
 | `docs/knowledge-base.md` | Included knowledge-base fixtures |
 | `docs/manual-test-plan.md` | Manual verification steps |
 | `docs/agent-transcripts/` | Development/debugging record |
-| `docs/SUBMISSION-CHECKLIST.md` | Final handoff checklist |
 
 ## Repository hygiene
 
